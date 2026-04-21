@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s \"http://export.arxiv.org/api/query?id_list=2604.06169\")",
+      "Bash(curl -sL \"https://export.arxiv.org/api/query?id_list=2604.06169\")",
+      "Bash(curl -sL \"https://arxiv.org/pdf/2604.06169v1\" -o \"/mnt/data/Arch/workspace/research/papers/2604.06169.pdf\")",
+      "Bash(curl -sL \"https://arxiv.org/html/2604.06169v1\")",
+      "WebFetch(domain:arxiv.org)",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/ByteDance-Seed/In-Place-TTT/main/README.md\")",
+      "Bash(ls /mnt/data/Arch/workspace/research/*.md)"
+    ]
+  }
+}
