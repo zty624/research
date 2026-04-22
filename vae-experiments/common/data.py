@@ -33,17 +33,25 @@ def get_cifar10(batch_size: int = 128, num_workers: int = 4) -> tuple[DataLoader
 
 
 def get_dsprites(batch_size: int = 128, num_workers: int = 4) -> tuple[DataLoader, DataLoader]:
-    """Load dSprites dataset. Downloads from DeepMind if not cached."""
+    """Load dSprites dataset. Downloads from Hugging Face if not cached."""
     import numpy as np
-    import urllib.request
+    from huggingface_hub import hf_hub_download
 
     data_path = os.path.join(_DATA_DIR, "dsprites_ndarray_co1sh3sc6or40x32x32_64x64.npz")
-    url = "https://github.com/deepmind/dsprites-dataset/raw/master/dsprites_ndarray_co1sh3sc6or40x32x32_64x64.npz"
 
     if not os.path.exists(data_path):
         print("Downloading dSprites dataset (~2.7GB)...")
         os.makedirs(os.path.dirname(data_path), exist_ok=True)
-        urllib.request.urlretrieve(url, data_path)
+        downloaded = hf_hub_download(
+            repo_id="google-deepmind/dsprites-dataset",
+            filename="dsprites_ndarray_co1sh3sc6or40x32x32_64x64.npz",
+            repo_type="dataset",
+            local_dir=_DATA_DIR,
+        )
+        # hf_hub_download may put it in a cache; copy if needed
+        if downloaded != data_path:
+            import shutil
+            shutil.copy2(downloaded, data_path)
         print("Download complete.")
 
     dataset_zip = np.load(data_path, allow_pickle=True)
