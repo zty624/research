@@ -84,8 +84,15 @@ def save_loss_curve(train_losses: list, val_losses: list | None,
 
 def save_latent_traversal(decoder, latent_dim: int, save_path: str,
                           n_values: int = 11, range_val: float = 3.0,
-                          title: str = "Latent Traversal"):
-    device = next(decoder.parameters()).device
+                          title: str = "Latent Traversal", device: str | None = None,
+                          image_shape: tuple | None = None):
+    if device is None:
+        try:
+            device = next(decoder.parameters()).device
+        except (StopIteration, AttributeError):
+            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    else:
+        device = torch.device(device)
     fig, axes = plt.subplots(latent_dim, n_values, figsize=(n_values, latent_dim))
     if latent_dim == 1:
         axes = axes[np.newaxis, :]
@@ -95,6 +102,8 @@ def save_latent_traversal(decoder, latent_dim: int, save_path: str,
             z[0, dim] = val
             with torch.no_grad():
                 sample = decoder(z).cpu().squeeze()
+            if sample.ndim == 1 and image_shape is not None:
+                sample = sample.view(*image_shape)
             if sample.ndim == 3 and sample.shape[0] in (1, 3):
                 sample = sample.permute(1, 2, 0)
             axes[dim, i].imshow(sample, cmap="gray" if sample.ndim == 2 else None)

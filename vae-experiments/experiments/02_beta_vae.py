@@ -1,4 +1,4 @@
-"""β-VAE on dSprites (Higgins et al., 2017).
+"""β-VAE on MNIST (Higgins et al., 2017).
 
 Usage: uv run experiments/02_beta_vae.py
 Sweeps β ∈ {1, 2, 4, 10} and compares disentanglement via latent traversal.
@@ -14,33 +14,27 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch import optim
 
-from common.data import get_dsprites
+from common.data import get_mnist
 from common.viz import save_reconstructions, save_latent_traversal, save_loss_curve, save_samples
 
 
 class BetaVAE(nn.Module):
-    def __init__(self, in_channels: int = 1, latent_dim: int = 10, beta: float = 4.0):
+    def __init__(self, latent_dim: int = 10, beta: float = 4.0):
         super().__init__()
         self.latent_dim = latent_dim
         self.beta = beta
 
         self.encoder = nn.Sequential(
-            nn.Conv2d(in_channels, 32, 4, 2, 1), nn.ReLU(),
-            nn.Conv2d(32, 32, 4, 2, 1), nn.ReLU(),
-            nn.Conv2d(32, 64, 4, 2, 1), nn.ReLU(),
-            nn.Conv2d(64, 64, 4, 2, 1), nn.ReLU(),
-            nn.Flatten(),
+            nn.Linear(784, 512), nn.ReLU(),
+            nn.Linear(512, 256), nn.ReLU(),
         )
-        self.fc_mu = nn.Linear(64 * 4 * 4, latent_dim)
-        self.fc_logvar = nn.Linear(64 * 4 * 4, latent_dim)
+        self.fc_mu = nn.Linear(256, latent_dim)
+        self.fc_logvar = nn.Linear(256, latent_dim)
 
-        self.fc_decode = nn.Linear(latent_dim, 64 * 4 * 4)
         self.decoder = nn.Sequential(
-            nn.ConvTranspose2d(64, 64, 4, 2, 1), nn.ReLU(),
-            nn.ConvTranspose2d(64, 32, 4, 2, 1), nn.ReLU(),
-            nn.ConvTranspose2d(32, 32, 4, 2, 1), nn.ReLU(),
-            nn.ConvTranspose2d(32, in_channels, 4, 2, 1),
-            nn.Sigmoid(),
+            nn.Linear(latent_dim, 256), nn.ReLU(),
+            nn.Linear(256, 512), nn.ReLU(),
+            nn.Linear(512, 784), nn.Sigmoid(),
         )
 
     def encode(self, x):
@@ -52,23 +46,22 @@ class BetaVAE(nn.Module):
         return mu + torch.randn_like(std) * std
 
     def decode(self, z):
-        h = self.fc_decode(z).view(-1, 64, 4, 4)
-        return self.decoder(h)
+        return self.decoder(z)
 
     def forward(self, x):
-        mu, logvar = self.encode(x)
+        mu, logvar = self.encode(x.view(-1, 784))
         z = self.reparameterize(mu, logvar)
         x_recon = self.decode(z)
         return x_recon, mu, logvar
 
     def loss_function(self, x_recon, x, mu, logvar):
-        BCE = F.binary_cross_entropy(x_recon, x, reduction="sum")
+        BCE = F.binary_cross_entropy(x_recon, x.view(-1, 784), reduction="sum")
         KLD = -0.5 * torch.sum(1 + logvar - mu.pow(2) - logvar.exp())
         return {"loss": BCE + self.beta * KLD, "BCE": BCE, "KLD": KLD}
 
     def sample(self, n, device):
         z = torch.randn(n, self.latent_dim, device=device)
-        return self.decode(z)
+        return self.decode(z).view(-1, 1, 28, 28)
 
 
 def train_one_beta(beta, train_loader, test_loader, device, result_dir, epochs=30):
@@ -86,7 +79,7 @@ def train_one_beta(beta, train_loader, test_loader, device, result_dir, epochs=3
     for epoch in range(1, epochs + 1):
         model.train()
         total_loss = 0
-        for (data,) in train_loader:
+        for data, _ in train_loader:
             data = data.to(device)
             optimizer.zero_grad()
             x_recon, mu, logvar = model(data)
@@ -100,7 +93,7 @@ def train_one_beta(beta, train_loader, test_loader, device, result_dir, epochs=3
         model.eval()
         val_loss = 0
         with torch.no_grad():
-            for (data,) in test_loader:
+            for data, _ in test_loader:
                 data = data.to(device)
                 x_recon, mu, logvar = model(data)
                 val_loss += model.loss_function(x_recon, data, mu, logvar)["loss"].item()
@@ -112,14 +105,16 @@ def train_one_beta(beta, train_loader, test_loader, device, result_dir, epochs=3
 
     torch.save(model.state_dict(), os.path.join(ckpt_dir, f"beta_vae_beta{beta}.pt"))
 
-    (data,) = next(iter(test_loader))
+    data, _ = next(iter(test_loader))
     data = data[:8].to(device)
     with torch.no_grad():
         x_recon, _, _ = model(data)
-    save_reconstructions(data, x_recon, os.path.join(sample_dir, "recon.png"))
+    save_reconstructions(data, x_recon.view(-1, 1, 28, 28),
+                        os.path.join(sample_dir, "recon.png"))
 
     save_latent_traversal(model.decode, model.latent_dim,
-                          os.path.join(sample_dir, "traversal.png"), n_values=11)
+                          os.path.join(sample_dir, "traversal.png"), n_values=11,
+                          device=device, image_shape=(28, 28))
 
     save_loss_curve(train_losses, val_losses, os.path.join(metric_dir, "loss_curve.png"),
                     title=f"β-VAE (β={beta}) Loss")
@@ -135,8 +130,7 @@ def main():
                               "results", "02-beta-vae")
     os.makedirs(result_dir, exist_ok=True)
 
-    print("Loading dSprites dataset...")
-    train_loader, test_loader = get_dsprites(batch_size=256)
+    train_loader, test_loader = get_mnist(batch_size=128)
 
     betas = [1, 2, 4, 10]
     results = {}

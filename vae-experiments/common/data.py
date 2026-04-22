@@ -9,8 +9,7 @@ _DATA_DIR = os.path.join(_PROJECT_DIR, "data")
 os.environ["TORCH_HOME"] = _DATA_DIR
 os.environ["HF_HOME"] = _DATA_DIR
 
-import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import DataLoader
 from torchvision import datasets, transforms
 
 
@@ -29,40 +28,4 @@ def get_cifar10(batch_size: int = 128, num_workers: int = 4) -> tuple[DataLoader
     test = datasets.CIFAR10(root=_DATA_DIR, train=False, download=True, transform=transform)
     train_loader = DataLoader(train, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
     test_loader = DataLoader(test, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
-    return train_loader, test_loader
-
-
-def get_dsprites(batch_size: int = 128, num_workers: int = 4) -> tuple[DataLoader, DataLoader]:
-    """Load dSprites dataset. Downloads from Hugging Face if not cached."""
-    import numpy as np
-    from huggingface_hub import hf_hub_download
-
-    data_path = os.path.join(_DATA_DIR, "dsprites_ndarray_co1sh3sc6or40x32x32_64x64.npz")
-
-    if not os.path.exists(data_path):
-        print("Downloading dSprites dataset (~2.7GB)...")
-        os.makedirs(os.path.dirname(data_path), exist_ok=True)
-        downloaded = hf_hub_download(
-            repo_id="google-deepmind/dsprites-dataset",
-            filename="dsprites_ndarray_co1sh3sc6or40x32x32_64x64.npz",
-            repo_type="dataset",
-            local_dir=_DATA_DIR,
-        )
-        # hf_hub_download may put it in a cache; copy if needed
-        if downloaded != data_path:
-            import shutil
-            shutil.copy2(downloaded, data_path)
-        print("Download complete.")
-
-    dataset_zip = np.load(data_path, allow_pickle=True)
-    imgs = dataset_zip["imgs"]  # (737280, 64, 64) bool
-    imgs = torch.from_numpy(imgs).float().unsqueeze(1)  # (N, 1, 64, 64)
-
-    n = len(imgs)
-    n_train = int(0.9 * n)
-    train_data = TensorDataset(imgs[:n_train])
-    test_data = TensorDataset(imgs[n_train:])
-
-    train_loader = DataLoader(train_data, batch_size=batch_size, shuffle=True, num_workers=num_workers, pin_memory=True)
-    test_loader = DataLoader(test_data, batch_size=batch_size, shuffle=False, num_workers=num_workers, pin_memory=True)
     return train_loader, test_loader
