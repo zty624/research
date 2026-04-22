@@ -40,6 +40,13 @@ uv run --project ../vae-experiments python 29_vit.py
 uv run --project ../vae-experiments python 30_optimizer.py
 uv run --project ../vae-experiments python 31_speculative.py
 uv run --project ../vae-experiments python 32_quantization.py
+uv run --project ../vae-experiments python 33_diffusion_policy.py
+uv run --project ../vae-experiments python 34_darts.py
+uv run --project ../vae-experiments python 35_resnet.py
+uv run --project ../vae-experiments python 36_batchnorm.py
+uv run --project ../vae-experiments python 37_layernorm.py
+uv run --project ../vae-experiments python 38_rmsnorm.py
+uv run --project ../vae-experiments python 39_rope.py
 ```
 
 ## Experiments
@@ -260,6 +267,55 @@ uv run --project ../vae-experiments python 32_quantization.py
 - **Compares**: FP32 vs INT8 Sym vs INT4 Sym vs INT4 GPTQ vs INT4 Mixed-Precision
 - **Visualizes**: Accuracy comparison, quantization error (MSE, cosine similarity), weight distributions, error heatmaps, model size, concept diagram
 - **Key finding**: INT8 preserves accuracy (94.73% vs 94.71% FP32); INT4 with GPTQ/mixed-precision achieves cosine similarity 0.99+; group-wise scales and outlier handling are critical for INT4 quality
+
+### 33. Diffusion Policy (2303.04137)
+- **Task**: 1D target tracking with expert demonstrations
+- **Reproduces**: Diffusion-based action generation, DDPM denoising conditioned on state, multi-modal action distribution
+- **Compares**: Deterministic policy (MSE) vs Diffusion policy (noise prediction), action distributions, trajectory tracking
+- **Visualizes**: Training loss, trajectory comparison with uncertainty bands, action distributions, denoising process, concept diagram
+- **Key finding**: Diffusion policy produces stochastic action distributions (std=0.33) capturing uncertainty; deterministic policy gives single point; diffusion policy's strength is in multi-modal action spaces
+
+### 34. DARTS / Differentiable Architecture Search (1806.09055)
+- **Task**: MNIST classification with architecture search
+- **Reproduces**: Differentiable relaxation of discrete architecture choices, softmax over candidate operations (conv, dilated conv, pool, skip, zero), bi-level optimization (α on val, w on train)
+- **Compares**: DARTS-discovered architecture vs fixed (CNN) vs random architecture
+- **Visualizes**: Training curves, architecture parameter (α) evolution, discovered architecture graph, concept diagram
+- **Key finding**: DARTS discovers dilated conv-dominated architecture with selective zero connections; discovered architecture outperforms random baseline
+
+### 35. ResNet / Skip Connections (1512.03385)
+- **Task**: MNIST classification at various depths
+- **Reproduces**: Residual learning (F(x) + x), skip connections enabling deeper networks, gradient flow through shortcuts
+- **Compares**: Plain network vs ResNet at 2/4/8 blocks per stage
+- **Visualizes**: Training curves at each depth, accuracy vs depth, gradient norm vs depth, concept diagram
+- **Key finding**: At depth 8, plain network degrades (96.95%) while ResNet improves (99.11%); gradient norms explode in plain deep networks
+
+### 36. Batch Normalization (1502.03167)
+- **Task**: MNIST classification with deep MLP at various learning rates
+- **Reproduces**: Batch normalization (custom implementation), internal covariate shift, learnable γ and β
+- **Compares**: No BN vs BN at 4 learning rates (1e-4 to 5e-2), custom BN vs PyTorch BN
+- **Visualizes**: LR sensitivity, activation distribution tracking, custom vs PyTorch BN, concept diagram
+- **Key finding**: At LR=0.05, no-BN model fails completely (11.35% random), BN achieves 95.92%; BN enables 7-8x higher learning rates
+
+### 37. Layer Normalization (1607.06450)
+- **Task**: Sequence classification with LSTM and Transformer
+- **Reproduces**: Custom LayerNorm implementation, BN vs LN vs GroupNorm normalization dimensions
+- **Compares**: LSTM with no/LN/BN norm, Transformer with no/LN/BN/GN norm
+- **Visualizes**: Training curves, normalization dimension heatmap (BN vs LN vs GN), concept diagram
+- **Key finding**: LayerNorm is standard for Transformers (works per-sample); BatchNorm fails on sequences; GroupNorm is a middle ground
+
+### 38. RMSNorm (2019.03210)
+- **Task**: Language modeling with Transformer
+- **Reproduces**: Custom RMSNorm (x/RMS(x) * γ, no mean subtraction, no β), LayerNorm vs RMSNorm comparison
+- **Compares**: LayerNorm vs RMSNorm vs No Norm, scaling at 2/4/8 layers
+- **Visualizes**: Training curves, scaling comparison, normalization effect on distributions, concept diagram
+- **Key finding**: RMSNorm is ~20% faster than LayerNorm with comparable quality; re-centering is redundant (β cancels -μ)
+
+### 39. RoPE / Rotary Position Embedding (2104.09864)
+- **Task**: Language modeling with different position encodings
+- **Reproduces**: Rotary position embedding via 2D rotation, q_m·k_n = f(m-n) relative position property
+- **Compares**: Sinusoidal vs learned vs RoPE position encoding, length extrapolation
+- **Visualizes**: Training curves, length extrapolation, relative position dot product, rotation visualization, concept diagram
+- **Key finding**: RoPE achieves best training loss (0.94 vs 1.11) and best length extrapolation (42.5% at 2x length); q·k variance is 0 at same relative distance
 
 ## Prior Experiments
 
