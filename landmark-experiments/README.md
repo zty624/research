@@ -38,6 +38,8 @@ uv run --project ../vae-experiments python 27_contrastive.py
 uv run --project ../vae-experiments python 28_dropout.py
 uv run --project ../vae-experiments python 29_vit.py
 uv run --project ../vae-experiments python 30_optimizer.py
+uv run --project ../vae-experiments python 31_speculative.py
+uv run --project ../vae-experiments python 32_quantization.py
 ```
 
 ## Experiments
@@ -244,6 +246,20 @@ uv run --project ../vae-experiments python 30_optimizer.py
 - **Compares**: 7 optimizer+schedule combinations on CNN training
 - **Visualizes**: Training loss, test accuracy, LR schedules, weight norm comparison (Adam vs AdamW), optimizer concept diagram
 - **Key finding**: AdamW keeps weight norms smaller than Adam (decoupled WD); LR scheduling significantly impacts convergence; SGD+momentum+cosine matches adaptive methods with proper tuning
+
+### 31. Speculative Decoding (2211.17192)
+- **Task**: Language model generation with draft-then-verify
+- **Reproduces**: Draft model proposes γ tokens, target model verifies in one forward pass, modified rejection sampling preserves exact distribution
+- **Compares**: Autoregressive vs Speculative (γ=2,4,6), accept rates, target model calls, output distribution
+- **Visualizes**: Speed comparison, accept rates, target forward passes, output distribution comparison, concept diagram
+- **Key finding**: Speculative decoding preserves output distribution (low KL divergence); accept rate ~50% at γ=2; real speedup requires memory-bandwidth-bound target model (not visible in small models)
+
+### 32. LLM Quantization (2208.07339, 2210.17323)
+- **Task**: MNIST classification with quantized MLP weights
+- **Reproduces**: Symmetric/asymmetric quantization, GPTQ-style group-wise quantization, mixed-precision (outliers in FP16)
+- **Compares**: FP32 vs INT8 Sym vs INT4 Sym vs INT4 GPTQ vs INT4 Mixed-Precision
+- **Visualizes**: Accuracy comparison, quantization error (MSE, cosine similarity), weight distributions, error heatmaps, model size, concept diagram
+- **Key finding**: INT8 preserves accuracy (94.73% vs 94.71% FP32); INT4 with GPTQ/mixed-precision achieves cosine similarity 0.99+; group-wise scales and outlier handling are critical for INT4 quality
 
 ## Prior Experiments
 
