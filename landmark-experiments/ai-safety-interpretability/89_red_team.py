@@ -39,9 +39,10 @@ def generate_harmful_benign_data(n_samples=2000, embed_dim=64, seed=42):
     harmful = np.outer(np.ones(n_harmful), danger_dir * 2.0) + rng.randn(n_harmful, embed_dim) * 0.3
 
     # Benign: spread in orthogonal complement + small component along danger dir
-    orth_basis = rng.randn(embed_dim, embed_dim)
-    orth_basis -= np.outer(orth_basis @ danger_dir, danger_dir)
-    benign = orth_basis[:n_benign] * 1.5 + rng.randn(n_benign, embed_dim) * 0.2
+    # Generate random vectors, then project out the danger direction
+    benign_raw = rng.randn(n_benign, embed_dim)
+    projections = np.outer(benign_raw @ danger_dir, danger_dir)  # (n_benign, embed_dim)
+    benign = (benign_raw - projections) * 1.5 + rng.randn(n_benign, embed_dim) * 0.2
 
     X = np.vstack([harmful, benign]).astype(np.float32)
     y = np.concatenate([np.ones(n_harmful), np.zeros(n_benign)]).astype(np.int64)

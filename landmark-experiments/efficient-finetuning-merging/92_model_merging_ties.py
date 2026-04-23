@@ -492,7 +492,7 @@ def main():
         flat = torch.cat([v.flatten() for v in task_vectors[t].values()]).cpu().numpy()
         n_params = len(flat)
         k_count = max(1, int(k * n_params))
-        _, top_idx = np.abs(flat).argsort()[::-1][:k_count]
+        top_idx = np.abs(flat).argsort()[::-1][:k_count]
 
         trimmed = np.zeros_like(flat)
         trimmed[top_idx] = flat[top_idx]

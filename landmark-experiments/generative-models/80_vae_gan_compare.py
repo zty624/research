@@ -20,7 +20,7 @@ from pathlib import Path
 
 # ── Synthetic Data ──
 
-def generate_pattern_dataset(n_samples=5000, img_size=28, device='cpu'):
+def generate_pattern_dataset(n_samples=5000, img_size=32, device='cpu'):
     """Generate simple pattern images: colored shapes on dark background.
     4 modes: horizontal stripe, vertical stripe, circle, diagonal."""
     images = torch.zeros(n_samples, 1, img_size, img_size, device=device)
@@ -81,12 +81,12 @@ def generate_pattern_dataset(n_samples=5000, img_size=28, device='cpu'):
 class VAE(nn.Module):
     """Variational Autoencoder with convolutional encoder/decoder."""
 
-    def __init__(self, latent_dim=16, img_size=28):
+    def __init__(self, latent_dim=16, img_size=32):
         super().__init__()
         self.latent_dim = latent_dim
         ch = 32
 
-        # Encoder
+        # Encoder: 32→16→8→4
         self.encoder = nn.Sequential(
             nn.Conv2d(1, ch, 4, 2, 1), nn.ReLU(),
             nn.Conv2d(ch, ch*2, 4, 2, 1), nn.ReLU(),
@@ -96,7 +96,7 @@ class VAE(nn.Module):
         self.fc_mu = nn.Linear(enc_out, latent_dim)
         self.fc_logvar = nn.Linear(enc_out, latent_dim)
 
-        # Decoder
+        # Decoder: 4→8→16→32
         self.fc_dec = nn.Linear(latent_dim, enc_out)
         self.ch4 = ch * 4
         self.dec_spatial = img_size // 8
@@ -138,7 +138,7 @@ class VAE(nn.Module):
 class GAN_Generator(nn.Module):
     """GAN generator with conv transpose layers."""
 
-    def __init__(self, latent_dim=16, img_size=28):
+    def __init__(self, latent_dim=16, img_size=32):
         super().__init__()
         self.latent_dim = latent_dim
         ch = 32
@@ -161,7 +161,7 @@ class GAN_Generator(nn.Module):
 class GAN_Discriminator(nn.Module):
     """GAN discriminator with conv layers."""
 
-    def __init__(self, img_size=28):
+    def __init__(self, img_size=32):
         super().__init__()
         ch = 32
         self.net = nn.Sequential(
@@ -531,7 +531,7 @@ def main():
     results_dir.mkdir(parents=True, exist_ok=True)
 
     latent_dim = 16
-    img_size = 28
+    img_size = 32
     n_epochs = 100
 
     # Generate data

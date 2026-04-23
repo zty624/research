@@ -212,12 +212,17 @@ class GaussianSplatModel:
         # Project 3D covariance to 2D (Jacobian approximation)
         cov_3d = self.build_covariance_3d()
         J = torch.zeros(N, 2, 3, device=self.device)
-        # Approximate Jacobian of projection at each point
+        # Jacobian of perspective projection: [fx/z, 0, -fx*x/z^2], [0, fy/z, -fy*y/z^2]
         fx = P[0, 0]
         fy = P[1, 1]
-        z = pos_cam[:, 2].unsqueeze(-1)  # (N, 1)
-        J[:, 0, 0] = fx / (z.squeeze(-1) + 1e-6)
-        J[:, 1, 1] = fy / (z.squeeze(-1) + 1e-6)
+        xc = pos_cam[:, 0]
+        yc = pos_cam[:, 1]
+        zc = pos_cam[:, 2]
+        zc_sq = zc * zc + 1e-6
+        J[:, 0, 0] = fx / (zc + 1e-6)
+        J[:, 0, 2] = -fx * xc / zc_sq
+        J[:, 1, 1] = fy / (zc + 1e-6)
+        J[:, 1, 2] = -fy * yc / zc_sq
 
         # 2D covariance: J * Sigma * J^T
         JC = torch.bmm(J, cov_3d)  # (N, 2, 3)
@@ -306,10 +311,9 @@ class GaussianSplatModel:
                 break
 
         # Background
-        bg = alpha_acc.squeeze(-1) < 0.99
-        image[bg.unsqueeze(-1).expand_as(image)] += (
-            1.0 - alpha_acc[bg].unsqueeze(-1)
-        ) * 0.8  # gray bg
+        T_bg = (1.0 - alpha_acc)  # (M, 1) transmittance for background
+        bg_mask = (T_bg > 0.01).squeeze(-1)  # (M,) pixels needing background
+        image[bg_mask] += T_bg[bg_mask] * 0.8  # gray bg
 
         return image.reshape(img_size, img_size, 3)
 

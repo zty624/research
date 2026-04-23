@@ -167,6 +167,8 @@ class ValleNARModel(nn.Module):
         tokens: (B, T) — tokens from previous levels (or sum of embeddings)
         level: int — which RVQ level to predict
         """
+        # Clamp tokens to valid range (AR model may produce BOS/EOS beyond vocab_size)
+        tokens = tokens.clamp(0, self.vocab_size - 1)
         x = self.token_emb(tokens) + self.level_emb(
             torch.tensor(level, device=tokens.device))
         x = self.pos_enc(x)
@@ -560,8 +562,8 @@ def main():
     colors_map = ['Blues', 'Greens', 'Purples']
     for level in range(1, 4):
         with torch.no_grad():
-            nar_logits = nar_model(level0_gen[0], level)
-            level_tokens = nar_logits.argmax(-1)
+            nar_logits = nar_model(level0_gen[0].unsqueeze(0), level)
+            level_tokens = nar_logits.argmax(-1).squeeze(0)
 
         axes[level].imshow(level_tokens.cpu().numpy().reshape(1, -1), aspect='auto',
                           cmap='tab20', vmin=0, vmax=vocab_size)

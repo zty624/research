@@ -357,7 +357,7 @@ def main():
     fig, axes = plt.subplots(1, 2, figsize=(16, 8))
 
     # Show activation heatmap: samples x features (top 50 active features)
-    z_np = z_best.numpy()
+    z_np = np.nan_to_num(z_best.numpy(), nan=0.0, posinf=1e6, neginf=0.0)
     feature_activity = (z_np > 1e-6).sum(axis=0)
     active_features = np.argsort(feature_activity)[-50:]  # Top 50 most active
 
@@ -432,7 +432,7 @@ def main():
     raw_selectivity = (raw_acts > raw_acts.mean(axis=0, keepdims=True)).mean(axis=0)
 
     # SAE feature activations
-    z_np_full = sae_results[best_coef]['z'][:200].numpy()
+    z_np_full = np.nan_to_num(sae_results[best_coef]['z'][:200].numpy(), nan=0.0, posinf=1e6, neginf=0.0)
     sae_selectivity = (z_np_full > 1e-6).mean(axis=0)
 
     axes[0].hist(raw_selectivity, bins=30, color='coral', edgecolor='black', alpha=0.7,
@@ -449,11 +449,11 @@ def main():
     # Compute pairwise correlation for raw neurons
     raw_corr = np.corrcoef(raw_acts.T)
     np.fill_diagonal(raw_corr, 0)
-    raw_max_corr = np.abs(raw_corr).max(axis=1)
+    raw_max_corr = np.nan_to_num(np.abs(raw_corr).max(axis=1))
 
     sae_corr = np.corrcoef(z_np_full.T)
     np.fill_diagonal(sae_corr, 0)
-    sae_max_corr = np.abs(sae_corr).max(axis=1)
+    sae_max_corr = np.nan_to_num(np.abs(sae_corr).max(axis=1))
 
     axes[1].hist(raw_max_corr, bins=30, color='coral', edgecolor='black', alpha=0.7,
                  label='Raw neurons')

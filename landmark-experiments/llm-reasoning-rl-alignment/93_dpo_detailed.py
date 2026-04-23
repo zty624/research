@@ -128,7 +128,7 @@ class PreferenceEnv:
 # ── DPO Training ──
 
 def train_dpo(policy, ref_policy, env, n_steps=1500, beta=0.1,
-              batch_size=32, lr=1e-4):
+              batch_size=32, lr=1e-4, device='cpu'):
     optimizer = torch.optim.AdamW(policy.parameters(), lr=lr)
     metrics = {'loss': [], 'margin': [], 'kl': [], 'win': []}
 

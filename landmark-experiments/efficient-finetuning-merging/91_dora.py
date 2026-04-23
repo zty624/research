@@ -430,7 +430,7 @@ def main():
         ("LoRA", lora_mag_ratios, lora_dir_changes),
         ("DoRA", mag_ratios, dir_changes),
     ]:
-        all_mag = torch.cat(mags).numpy() if mags else np.array([])
+        all_mag = torch.cat(mags).cpu().numpy() if mags else np.array([])
         all_dir = torch.cat(dirs).numpy() if dirs else np.array([])
         if len(all_mag) > 0:
             print(f"  {label}: mag_ratio mean={all_mag.mean():.4f} std={all_mag.std():.4f} | "
@@ -484,7 +484,7 @@ def main():
         (axes[1], lora_mag_ratios, lora_dir_changes, 'LoRA', '#FF9800'),
         (axes[2], mag_ratios, dir_changes, 'DoRA', '#4CAF50'),
     ]:
-        all_mag = torch.cat(mags).numpy() if mags else np.array([])
+        all_mag = torch.cat(mags).cpu().numpy() if mags else np.array([])
         all_dir = torch.cat(dirs).numpy() if dirs else np.array([])
         if len(all_mag) > 0:
             ax.scatter(all_mag, all_dir, alpha=0.3, s=8, color=color)
@@ -510,7 +510,7 @@ def main():
         (lora_mag_ratios, 'LoRA', '#FF9800'),
         (mag_ratios, 'DoRA', '#4CAF50'),
     ]:
-        all_mag = torch.cat(mags).numpy() if mags else np.array([])
+        all_mag = torch.cat(mags).cpu().numpy() if mags else np.array([])
         if len(all_mag) > 0:
             ax1.hist(all_mag, bins=50, alpha=0.5, label=label, color=color, density=True)
 
