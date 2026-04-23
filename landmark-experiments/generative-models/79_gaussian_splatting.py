@@ -138,10 +138,11 @@ def generate_training_views(n_views=6, img_size=64, radius=0.8):
 
 # ── 3D Gaussian Model ──
 
-class GaussianSplatModel:
+class GaussianSplatModel(nn.Module):
     """Collection of 3D Gaussians with differentiable rendering."""
 
     def __init__(self, n_gaussians=500, init_range=1.5, device='cpu'):
+        super().__init__()
         self.n = n_gaussians
         self.device = device
 
@@ -165,10 +166,6 @@ class GaussianSplatModel:
         self.log_opacities = nn.Parameter(
             torch.zeros(n_gaussians, 1, device=device)
         )
-
-    def parameters(self):
-        return [self.positions, self.log_scales, self.quats,
-                self.colors, self.log_opacities]
 
     def build_covariance_3d(self):
         """Build 3D covariance from scales and rotation."""
@@ -310,10 +307,9 @@ class GaussianSplatModel:
             if (alpha_acc > 0.99).all():
                 break
 
-        # Background
-        T_bg = (1.0 - alpha_acc)  # (M, 1) transmittance for background
-        bg_mask = (T_bg > 0.01).squeeze(-1)  # (M,) pixels needing background
-        image[bg_mask] += T_bg[bg_mask] * 0.8  # gray bg
+        # Background (differentiable: apply everywhere, alpha_acc masks naturally)
+        T_bg = 1.0 - alpha_acc  # (M, 1) remaining transmittance
+        image = image + T_bg * 0.8  # gray background fills remaining
 
         return image.reshape(img_size, img_size, 3)
 

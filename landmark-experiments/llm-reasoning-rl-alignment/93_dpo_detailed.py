@@ -176,7 +176,7 @@ def train_dpo(policy, ref_policy, env, n_steps=1500, beta=0.1,
 # ── Simplified PPO Training ──
 
 def train_ppo(policy, reward_model, ref_policy, env, n_steps=1500,
-              kl_coeff=0.1, clip_eps=0.2, batch_size=32, lr=1e-4):
+              kl_coeff=0.1, clip_eps=0.2, batch_size=32, lr=1e-4, device='cpu'):
     # Phase 1: train reward model on preference data
     print("  [PPO] Training reward model ...")
     rm_opt = torch.optim.AdamW(reward_model.parameters(), lr=1e-3)

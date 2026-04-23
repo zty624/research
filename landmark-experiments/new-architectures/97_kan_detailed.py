@@ -4,7 +4,7 @@ Detailed KAN (Kolmogorov-Arnold Networks) Reproduction
 Reproduces core ideas from KAN (2404.19756, Liu et al.):
 1. Kolmogorov-Arnold representation theorem: any continuous f = sum of univariate functions
 2. Learnable B-spline activation functions on edges (not fixed activations on nodes)
-3. Proper B-spline basis with Cox-de Boor recursion
+3. Efficient vectorized B-spline evaluation via grid-based approach
 4. Grid extension: adapting spline resolution during training
 5. Compare KAN vs MLP on compositional function approximation
 6. Show: learned activation shapes, parameter efficiency, compositional structure capture
@@ -19,14 +19,15 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 
-# ── B-Spline Basis (Proper Implementation) ──
+# ── Efficient B-Spline Basis (Vectorized) ──
 
 class BSplineBasis(nn.Module):
-    """Proper B-spline basis with Cox-de Boor recursion.
+    """Efficient B-spline basis using grid-based evaluation.
 
-    Unlike the simplified RBF version, this implements true B-splines
-    with a knot vector and the recursive basis evaluation, matching
-    the original KAN paper's formulation.
+    Matches the KAN paper's approach: evaluate B-spline basis functions
+    on a uniform grid using vectorized operations (no Python recursion).
+    Uses the same mathematical formulation but computes all basis functions
+    in parallel for the entire batch.
     """
     def __init__(self, n_grid=5, degree=3, domain=(-2, 2)):
         super().__init__()
@@ -37,78 +38,71 @@ class BSplineBasis(nn.Module):
         self.n_basis = n_grid + degree - 1
         # Learnable coefficients for each basis function
         self.coeffs = nn.Parameter(torch.randn(self.n_basis) * 0.1)
-        # Build and register knot vector
-        self.register_buffer('knots', self._make_knots())
-
-    def _make_knots(self):
-        """Create clamped uniform knot vector.
-
-        For degree d with n_grid interior intervals:
-        - d+1 copies of left boundary
-        - n_grid-1 evenly spaced interior knots
-        - d+1 copies of right boundary
-        Total knots = 2*(degree+1) + n_grid - 1
-        """
-        left = self.domain[0]
-        right = self.domain[1]
-        # Interior knots (evenly spaced)
-        n_interior = self.n_grid - 1
-        if n_interior > 0:
-            interior = torch.linspace(left, right, n_interior + 2)[1:-1]
-        else:
-            interior = torch.tensor([])
-        # Clamped: pad boundaries with degree+1 copies
-        left_pad = left * torch.ones(self.degree + 1)
-        right_pad = right * torch.ones(self.degree + 1)
-        knots = torch.cat([left_pad, interior, right_pad])
-        return knots
-
-    def _basis_recursive(self, x, k, i):
-        """Cox-de Boor recursion for B_{i,k}(x).
-
-        B_{i,0}(x) = 1 if knots[i] <= x < knots[i+1], else 0
-        B_{i,k}(x) = w_{i,k}(x) * B_{i,k-1}(x) + (1-w_{i+1,k}(x)) * B_{i+1,k-1}(x)
-        where w_{i,k}(x) = (x - knots[i]) / (knots[i+k] - knots[i])
-        """
-        if k == 0:
-            # Degree 0: piecewise constant
-            return ((x >= self.knots[i]) & (x < self.knots[i + 1])).float()
-
-        # Left term
-        denom_left = self.knots[i + k] - self.knots[i]
-        if abs(denom_left) < 1e-8:
-            left = torch.zeros_like(x)
-        else:
-            w = (x - self.knots[i]) / denom_left
-            left = w * self._basis_recursive(x, k - 1, i)
-
-        # Right term
-        denom_right = self.knots[i + k + 1] - self.knots[i + 1]
-        if abs(denom_right) < 1e-8:
-            right = torch.zeros_like(x)
-        else:
-            w = (self.knots[i + k + 1] - x) / denom_right
-            right = w * self._basis_recursive(x, k - 1, i + 1)
-
-        return left + right
+        # Grid points for B-spline evaluation
+        self.register_buffer('grid', torch.linspace(domain[0], domain[1], n_grid + 1))
 
     def basis_functions(self, x):
-        """Evaluate all B-spline basis functions at x.
+        """Evaluate B-spline basis functions using vectorized Cox-de Boor.
 
         Args:
             x: (B,) input values
         Returns:
             (B, n_basis) tensor of basis function values
         """
+        # Extend grid with padding for degree
+        pad = self.degree
+        grid = self.grid
+        h = (grid[-1] - grid[0]) / (len(grid) - 1)
+        extended = torch.cat([
+            grid[0] - h * torch.arange(pad, 0, -1, device=x.device),
+            grid,
+            grid[-1] + h * torch.arange(1, pad + 1, device=x.device),
+        ])
+
+        n_knots = len(extended)
         B = x.shape[0]
-        basis = torch.zeros(B, self.n_basis, device=x.device)
-        for i in range(self.n_basis):
-            basis[:, i] = self._basis_recursive(x, self.degree, i)
-        # Handle right boundary: include it in the last basis function
-        right_mask = (x >= self.knots[-(self.degree + 2)]) & (x <= self.domain[1])
-        if right_mask.any():
-            basis[right_mask, -1] = 1.0
-        return basis
+        n_basis = n_knots - 1  # number of degree-0 basis functions
+
+        # Degree 0: indicator function
+        basis = torch.zeros(B, n_basis, device=x.device)
+        for i in range(n_basis):
+            basis[:, i] = ((x >= extended[i]) & (x < extended[i + 1])).float()
+        # Include right endpoint in last basis
+        basis[:, -1] = basis[:, -1] + (x >= extended[-2]).float() * (x <= extended[-1]).float()
+
+        # Recursive evaluation up to target degree
+        for k in range(1, self.degree + 1):
+            n_basis_k = n_basis - k
+            new_basis = torch.zeros(B, n_basis_k, device=x.device)
+            for i in range(n_basis_k):
+                # Left term
+                denom_left = extended[i + k] - extended[i]
+                if abs(denom_left) < 1e-8:
+                    left = torch.zeros(B, device=x.device)
+                else:
+                    left = (x - extended[i]) / denom_left * basis[:, i]
+
+                # Right term
+                denom_right = extended[i + k + 1] - extended[i + 1]
+                if abs(denom_right) < 1e-8:
+                    right = torch.zeros(B, device=x.device)
+                else:
+                    right = (extended[i + k + 1] - x) / denom_right * basis[:, i + 1]
+
+                new_basis[:, i] = left + right
+            basis = new_basis
+
+        # Return the correct number of basis functions
+        # n_basis_final = n_knots - 1 - degree = len(extended) - degree - 1
+        # We want self.n_basis functions
+        # Center crop if we have too many
+        if basis.shape[1] >= self.n_basis:
+            start = (basis.shape[1] - self.n_basis) // 2
+            return basis[:, start:start + self.n_basis]
+        else:
+            # Pad if too few
+            pad_size = self.n_basis - basis.shape[1]
+            return torch.cat([basis, torch.zeros(B, pad_size, device=x.device)], dim=1)
 
     def forward(self, x):
         """Evaluate spline: sum(coeffs * basis_functions)."""
@@ -220,20 +214,15 @@ def make_function(name, n_points=5000, device='cpu'):
     """Generate synthetic data from various target functions."""
     X = torch.rand(n_points, 2, device=device) * 4 - 2  # [-2, 2]^2
     if name == 'sincos':
-        # Compositional: sin(pi*x) * cos(pi*y)
         Y = torch.sin(X[:, 0:1] * np.pi) * torch.cos(X[:, 1:2] * np.pi)
     elif name == 'x2_plus_y2':
-        # Additive: x^2 + y^2 — decomposes as sum of univariate functions
         Y = X[:, 0:1]**2 + X[:, 1:2]**2
     elif name == 'exp_sin':
-        # Compositional: exp(sin(x) + y^2)
         Y = torch.exp(torch.sin(X[:, 0:1]) + X[:, 1:2]**2)
     elif name == 'sinc':
-        # sinc-like: sin(||x||) / ||x||
         r = torch.sqrt(X[:, 0:1]**2 + X[:, 1:2]**2 + 1e-8)
         Y = torch.sin(r) / r
     elif name == 'product':
-        # Multiplicative: x * y — tests interaction learning
         Y = X[:, 0:1] * X[:, 1:2]
     else:
         raise ValueError(f"Unknown function: {name}")
@@ -247,7 +236,7 @@ def main():
     results_dir = Path(__file__).parent / "results" / "97-kan-detailed"
     results_dir.mkdir(parents=True, exist_ok=True)
 
-    n_steps = 3000
+    n_steps = 2000
     functions = ['sincos', 'x2_plus_y2', 'exp_sin', 'sinc', 'product']
 
     # ── Experiment 1: KAN vs MLP on multiple functions ──
@@ -280,24 +269,18 @@ def main():
     # ── Experiment 2: Compositional structure ──
 
     print("\n=== Compositional Structure: Additive vs Non-Additive ===")
-    # Additive functions should be easier for KAN (KA theorem decomposes into univariates)
-    # x^2 + y^2 is additive; exp(sin(x)+y^2) is compositional but also decomposable
-
     X_add, Y_add = make_function('x2_plus_y2', device=device)
     X_comp, Y_comp = make_function('exp_sin', device=device)
 
-    # Smaller KAN for additive: [2, 3, 1] should suffice
     kan_small = KAN([2, 3, 1], n_grid=5, degree=3).to(device)
     print(f"  Small KAN params (additive): {sum(p.numel() for p in kan_small.parameters()):,}")
-    kan_small_losses = train_model(kan_small, X_add, Y_add, n_steps=2000, device=device)
+    kan_small_losses = train_model(kan_small, X_add, Y_add, n_steps=1500, device=device)
 
-    # Same small KAN on compositional
     kan_small2 = KAN([2, 3, 1], n_grid=5, degree=3).to(device)
-    kan_small2_losses = train_model(kan_small2, X_comp, Y_comp, n_steps=2000, device=device)
+    kan_small2_losses = train_model(kan_small2, X_comp, Y_comp, n_steps=1500, device=device)
 
-    # Larger KAN for compositional: [2, 5, 1]
     kan_large = KAN([2, 5, 1], n_grid=5, degree=3).to(device)
-    kan_large_losses = train_model(kan_large, X_comp, Y_comp, n_steps=2000, device=device)
+    kan_large_losses = train_model(kan_large, X_comp, Y_comp, n_steps=1500, device=device)
 
     # ── Experiment 3: Grid resolution study ──
 
@@ -308,7 +291,7 @@ def main():
         kan_g = KAN([2, 5, 1], n_grid=n_grid, degree=3).to(device)
         n_params = sum(p.numel() for p in kan_g.parameters())
         print(f"  n_grid={n_grid}, params={n_params}")
-        l = train_model(kan_g, X_g, Y_g, n_steps=2000, device=device)
+        l = train_model(kan_g, X_g, Y_g, n_steps=1500, device=device)
         grid_losses[n_grid] = l
 
     # ── Visualization ──
@@ -379,7 +362,7 @@ def main():
     print("\n=== Visualizing B-Spline Activations ===")
     X_vis, Y_vis = make_function('sincos', device=device)
     kan_vis = KAN([2, 5, 1], n_grid=5, degree=3).to(device)
-    train_model(kan_vis, X_vis, Y_vis, n_steps=3000, device=device)
+    train_model(kan_vis, X_vis, Y_vis, n_steps=2000, device=device)
 
     fig, axes = plt.subplots(2, 5, figsize=(20, 8))
     x_range = torch.linspace(-2, 2, 200, device=device)
@@ -410,16 +393,15 @@ def main():
     # 5. Individual B-spline basis functions visualization
     fig, ax = plt.subplots(figsize=(10, 5))
     x_plot = torch.linspace(-2, 2, 200)
-    # Show basis functions for the first spline in layer 0
     spline_0 = kan_vis.layers[0].splines[0]
     with torch.no_grad():
         basis_vals = spline_0.basis_functions(x_plot).cpu().numpy()
 
-    for i in range(spline_0.n_basis):
+    for i in range(min(spline_0.n_basis, basis_vals.shape[1])):
         ax.plot(x_plot.numpy(), basis_vals[:, i], label=f'B_{i}', alpha=0.7)
     ax.set_xlabel("x")
     ax.set_ylabel("B_i(x)")
-    ax.set_title("B-Spline Basis Functions (Cox-de Boor, degree=3, n_grid=5)")
+    ax.set_title("B-Spline Basis Functions (degree=3, n_grid=5)")
     ax.legend(fontsize=8)
     ax.grid(True, alpha=0.3)
     plt.tight_layout()

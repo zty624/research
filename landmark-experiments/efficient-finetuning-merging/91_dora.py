@@ -431,7 +431,7 @@ def main():
         ("DoRA", mag_ratios, dir_changes),
     ]:
         all_mag = torch.cat(mags).cpu().numpy() if mags else np.array([])
-        all_dir = torch.cat(dirs).numpy() if dirs else np.array([])
+        all_dir = torch.cat(dirs).cpu().numpy() if dirs else np.array([])
         if len(all_mag) > 0:
             print(f"  {label}: mag_ratio mean={all_mag.mean():.4f} std={all_mag.std():.4f} | "
                   f"dir_change mean={all_dir.mean():.6f} std={all_dir.std():.6f}")
@@ -485,7 +485,7 @@ def main():
         (axes[2], mag_ratios, dir_changes, 'DoRA', '#4CAF50'),
     ]:
         all_mag = torch.cat(mags).cpu().numpy() if mags else np.array([])
-        all_dir = torch.cat(dirs).numpy() if dirs else np.array([])
+        all_dir = torch.cat(dirs).cpu().numpy() if dirs else np.array([])
         if len(all_mag) > 0:
             ax.scatter(all_mag, all_dir, alpha=0.3, s=8, color=color)
             ax.axhline(y=0, color='gray', linestyle='--', alpha=0.5)
@@ -519,7 +519,7 @@ def main():
         (lora_dir_changes, 'LoRA', '#FF9800'),
         (dir_changes, 'DoRA', '#4CAF50'),
     ]:
-        all_dir = torch.cat(dirs).numpy() if dirs else np.array([])
+        all_dir = torch.cat(dirs).cpu().numpy() if dirs else np.array([])
         if len(all_dir) > 0:
             ax2.hist(all_dir, bins=50, alpha=0.5, label=label, color=color, density=True)
 
