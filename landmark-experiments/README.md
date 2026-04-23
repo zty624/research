@@ -51,6 +51,20 @@ uv run --project ../vae-experiments python 40_swiglu.py
 uv run --project ../vae-experiments python 41_bpe_tokenization.py
 uv run --project ../vae-experiments python 42_attention_sinks.py
 uv run --project ../vae-experiments python 43_scaling_laws.py
+uv run --project ../vae-experiments python 44_convnext.py
+uv run --project ../vae-experiments python 45_nucleus_sampling.py
+uv run --project ../vae-experiments python 46_grokking.py
+uv run --project ../vae-experiments python 47_sparse_attention.py
+uv run --project ../vae-experiments python 48_lottery_ticket.py
+uv run --project ../vae-experiments python 49_ema.py
+uv run --project ../vae-experiments python 50_transformer_xl.py
+uv run --project ../vae-experiments python 51_alibi.py
+uv run --project ../vae-experiments python 52_self_instruct.py
+uv run --project ../vae-experiments python 53_rwkv.py
+uv run --project ../vae-experiments python 54_gradcam.py
+uv run --project ../vae-experiments python 55_cfg.py
+uv run --project ../vae-experiments python 56_rectified_flow.py
+uv run --project ../vae-experiments python 57_xlstm.py
 ```
 
 ## Experiments
@@ -348,6 +362,104 @@ uv run --project ../vae-experiments python 43_scaling_laws.py
 - **Compares**: 6 model sizes (18K-817K params), 6 data sizes (500-20K tokens), compute-optimal frontier
 - **Visualizes**: Loss vs parameters (power law), loss vs data, Chinchilla compute trade-off, concept diagram
 - **Key finding**: Loss follows power-law with model size and data; for fixed compute, smaller models trained longer can match larger models
+
+### 44. ConvNeXt (2201.03545)
+- **Task**: MNIST classification with modernized CNN
+- **Reproduces**: Step-by-step modernization of ResNet (depthwise conv → large kernel → GELU → inverted bottleneck), ConvNeXt block design
+- **Compares**: ResNet vs ConvNeXt, incremental modernization steps
+- **Visualizes**: Training curves, modernization step accuracy, concept diagram
+- **Key finding**: Each modernization step contributes: depthwise conv drops acc but reduces params, large kernel recovers, GELU adds ~1%, inverted bottleneck adds ~0.7%
+
+### 45. Nucleus Sampling (1904.09751)
+- **Task**: Language model generation with different sampling strategies
+- **Reproduces**: Temperature scaling, top-k sampling, top-p (nucleus) sampling, greedy decoding
+- **Compares**: 7 sampling methods on diversity and quality
+- **Visualizes**: Temperature effect on distributions, cumulative probability (nucleus), diversity comparison, concept diagram
+- **Key finding**: Temperature controls distribution sharpness (entropy 0.68→3.06); nucleus sampling adapts vocabulary size dynamically
+
+### 46. Grokking (2201.02177)
+- **Task**: Modular arithmetic (a+b)%p with delayed generalization
+- **Reproduces**: Grokking phenomenon — memorization then sudden generalization, weight decay necessity, training fraction effect
+- **Compares**: With vs without weight decay, different training data fractions
+- **Visualizes**: Grokking curves, weight decay comparison, training fraction effect, concept diagram
+- **Key finding**: Train acc hits 100% immediately (memorization), test acc rises slowly (grokking); weight decay drives the phase transition
+
+### 47. Sparse Attention / Longformer (2004.05150)
+- **Task**: Document classification with efficient attention
+- **Reproduces**: Full O(N²) attention, sliding window attention O(N×w), Longformer (sliding window + global tokens)
+- **Compares**: Full vs Sliding Window vs Longformer attention on classification quality and speed
+- **Visualizes**: Attention pattern heatmaps, training curves, time scaling, concept diagram
+- **Key finding**: Sliding window and Longformer achieve comparable accuracy with much less compute; Longformer's global tokens add task-specific information flow
+
+### 48. Lottery Ticket Hypothesis (1803.03635)
+- **Task**: Finding sparse trainable subnetworks at initialization
+- **Reproduces**: Iterative Magnitude Pruning (IMP), winning ticket (prune + reset to init + retrain), random pruning baseline
+- **Compares**: IMP (winning ticket) vs random pruning at multiple sparsity levels (0-95%)
+- **Visualizes**: Accuracy vs sparsity, training curves at 80% sparsity, pruned weight distributions, concept diagram
+- **Key finding**: IMP at 90% sparsity: 96.00% vs random 94.92%; at 95%: IMP 95.58% vs random 93.90% — winning tickets exist and outperform random pruning
+
+### 49. EMA / Exponential Moving Average (various — DDPM, BYOL)
+- **Task**: Stable model training via weight averaging
+- **Reproduces**: EMA (θ_ema = β·θ_ema + (1-β)·θ), EMA for diffusion model generation quality, EMA for classifier accuracy
+- **Compares**: Raw model vs EMA model, β decay sensitivity (0.9, 0.99, 0.999, 0.9999)
+- **Visualizes**: Raw vs EMA generated samples, accuracy comparison, weight trajectory smoothing, concept diagram
+- **Key finding**: β=0.99 gives slight improvement over raw; β=0.9999 too slow for 15 epochs; EMA smooths weight oscillations for more stable outputs
+
+### 50. Transformer-XL (1802.04799)
+- **Task**: Copy task with segment-level recurrence
+- **Reproduces**: Segment-level recurrence (cache hidden states from previous segment), relative positional encoding, memory mechanism
+- **Compares**: Transformer-XL (with memory) vs Transformer-XL (no memory) vs Vanilla Transformer
+- **Visualizes**: Training curves, sequence length scaling, relative vs absolute position encoding, concept diagram
+- **Key finding**: Segment-level recurrence enables cross-segment information flow; relative position encoding generalizes across segments
+
+### 51. ALiBi (1910.03193)
+- **Task**: Periodic sequence prediction with length extrapolation
+- **Reproduces**: Attention with Linear Biases (no positional embeddings), geometric slope sequence 2^(-8h/H), length extrapolation
+- **Compares**: ALiBi vs learned position vs sinusoidal position encoding
+- **Visualizes**: Training curves, length extrapolation accuracy, per-head bias patterns, slope distribution, concept diagram
+- **Key finding**: ALiBi extrapolates to 2.5x training length (94.5% acc) while learned position drops to 74.3%; slopes are NOT learned
+
+### 52. Self-Instruct (2302.04761)
+- **Task**: Bootstrapping instruction-following data from seed instructions
+- **Reproduces**: Instruction generation from seed examples, deduplication filtering, temperature-controlled creativity, self-training loop
+- **Compares**: Different temperatures on pool diversity and quality
+- **Visualizes**: Pool growth, instruction length distribution, temperature effects, self-training quality improvement, concept diagram
+- **Key finding**: Model quality improves iteratively through self-training (0.30 → 0.51 over 5 iterations); temperature controls diversity-redundancy trade-off
+
+### 53. RWKV (2305.13048)
+- **Task**: Periodic sequence prediction with linear attention
+- **Reproduces**: WKV attention with channel-wise decay, time-shift mixing, squared ReLU FFN, RNN-mode inference
+- **Compares**: RWKV vs Transformer on training loss and sequence length scaling
+- **Visualizes**: Training curves, loss vs sequence length, per-head decay patterns, memory complexity, concept diagram
+- **Key finding**: RWKV achieves competitive loss with O(N) memory; learned decay rates differ per head; competitive with Transformer at longer sequences
+
+### 54. GradCAM (1610.02391)
+- **Task**: Visual explanations of CNN predictions on MNIST
+- **Reproduces**: Gradient-weighted Class Activation Mapping, α_k = GAP(∂y^c/∂A_k), L_GradCAM = ReLU(Σ α_k · A_k)
+- **Compares**: GradCAM vs vanilla gradient saliency maps, class-specific explanations
+- **Visualizes**: Saliency maps vs GradCAM overlays, per-class activation maps, top-5 class explanations
+- **Key finding**: GradCAM provides cleaner, more localized explanations than saliency maps; different classes highlight different image regions
+
+### 55. Classifier-Free Guidance (2207.12598)
+- **Task**: Conditional 2D point cloud generation with class guidance
+- **Reproduces**: Condition dropout during training, classifier-free guidance formula ê = (1+w)·ε(x,c) - w·ε(x,∅)
+- **Compares**: Guidance scales w=0 (unconditional) to w=5 (strong guidance)
+- **Visualizes**: Guidance scale effect on samples, class-conditional generation, accuracy vs diversity trade-off
+- **Key finding**: w=2-3 gives best accuracy-diversity trade-off; w>1 amplifies condition effect; distance from target drops from 0.33 (w=0) to 0.13 (w=2)
+
+### 56. Rectified Flow (2209.03003)
+- **Task**: 2D point cloud generation via straight ODE paths
+- **Reproduces**: Linear interpolation z_t = t·x_1 + (1-t)·x_0, velocity prediction v = x_1 - x_0, Euler ODE solving
+- **Compares**: Rectified Flow vs DDPM diffusion on sampling steps needed
+- **Visualizes**: Training curves, trajectory comparison (straight vs curved), few-step generation quality, concept diagram
+- **Key finding**: Rectified Flow converges with 5-10 steps (std ~0.8-0.95) vs diffusion needing 10+; straight paths enable efficient sampling
+
+### 57. xLSTM (2405.04517)
+- **Task**: Periodic sequence prediction with extended LSTM
+- **Reproduces**: sLSTM (exponential gating + scalar memory), mLSTM (matrix memory with key-value store), alternating sLSTM/mLSTM blocks
+- **Compares**: xLSTM vs standard LSTM vs Transformer, sLSTM vs mLSTM ablation
+- **Visualizes**: Training curves, sequence length scaling, architecture analysis, concept diagram
+- **Key finding**: xLSTM with exponential gating outperforms standard LSTM at short sequences (1.30 vs 1.73); mLSTM matrix memory needs careful stabilization for longer sequences
 
 ## Prior Experiments
 
