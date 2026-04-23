@@ -163,7 +163,10 @@ class SMILESVAE(nn.Module):
     def interpolate(self, z1, z2, n_steps=10):
         """Linear interpolation between two latent codes."""
         alphas = torch.linspace(0, 1, n_steps, device=z1.device)
-        z_interp = torch.stack([a * z2 + (1 - a) * z1 for a in alphas])
+        # z1, z2 are (1, latent_dim) — squeeze to 1D then stack
+        z1_flat = z1.reshape(-1)
+        z2_flat = z2.reshape(-1)
+        z_interp = torch.stack([a * z2_flat + (1 - a) * z1_flat for a in alphas])  # (n_steps, latent_dim)
         logits = self.decode(z_interp, teacher_forcing_ratio=0.0)
         return logits.argmax(dim=-1)
 

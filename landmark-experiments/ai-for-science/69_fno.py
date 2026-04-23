@@ -133,7 +133,7 @@ def generate_darcy_data(n_samples, resolution, device='cpu'):
     if kernel_size % 2 == 0:
         kernel_size += 1
     sigma = kernel_size / 4
-    ax = torch.arange(kernel_size, dtype=torch.float32) - kernel_size // 2
+    ax = torch.arange(kernel_size, dtype=torch.float32, device=device) - kernel_size // 2
     kernel_1d = torch.exp(-ax**2 / (2 * sigma**2))
     kernel_1d = kernel_1d / kernel_1d.sum()
     kernel_2d = kernel_1d[:, None] * kernel_1d[None, :]

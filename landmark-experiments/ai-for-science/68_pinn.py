@@ -47,18 +47,12 @@ def burgers_pinn_train(n_collocation=10000, n_boundary=200, n_initial=200,
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = torch.optim.lr_scheduler.StepLR(optimizer, 2000, 0.5)
 
-    # Collocation points (interior)
-    x_col = torch.rand(n_collocation, device=device) * 2 - 1  # [-1, 1]
-    t_col = torch.rand(n_collocation, device=device)  # [0, 1]
-    x_col.requires_grad_(True)
-    t_col.requires_grad_(True)
-
-    # Initial condition points
+    # Initial condition points (static)
     x_ic = torch.rand(n_initial, device=device) * 2 - 1
     t_ic = torch.zeros(n_initial, device=device)
     u_ic = -torch.sin(np.pi * x_ic)
 
-    # Boundary condition points
+    # Boundary condition points (static)
     t_bc = torch.rand(n_boundary, device=device)
     x_bc_left = -torch.ones(n_boundary, device=device)
     x_bc_right = torch.ones(n_boundary, device=device)
@@ -66,6 +60,12 @@ def burgers_pinn_train(n_collocation=10000, n_boundary=200, n_initial=200,
     losses = []
     for epoch in range(epochs):
         optimizer.zero_grad()
+
+        # Resample collocation points each epoch (avoids graph accumulation)
+        x_col = torch.rand(n_collocation, device=device) * 2 - 1
+        t_col = torch.rand(n_collocation, device=device)
+        x_col.requires_grad_(True)
+        t_col.requires_grad_(True)
 
         # Interior: PDE residual
         xt = torch.stack([x_col, t_col], dim=-1)
@@ -168,16 +168,7 @@ def poisson_pinn_train(n_collocation=5000, n_boundary=400, epochs=5000,
     model = MLP(layers=[2, 64, 64, 64, 1]).to(device)
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 
-    # Collocation points
-    x_col = torch.rand(n_collocation, device=device) * 2 - 1
-    y_col = torch.rand(n_collocation, device=device) * 2 - 1
-    x_col.requires_grad_(True)
-    y_col.requires_grad_(True)
-
-    # Source term
-    f_source = -2 * np.pi**2 * torch.sin(np.pi * x_col) * torch.sin(np.pi * y_col)
-
-    # Boundary points (4 edges)
+    # Boundary points (4 edges) (static)
     n_b = n_boundary // 4
     t_param = torch.rand(n_b, device=device) * 2 - 1
     xy_bc = []
@@ -190,6 +181,15 @@ def poisson_pinn_train(n_collocation=5000, n_boundary=400, epochs=5000,
     losses = []
     for epoch in range(epochs):
         optimizer.zero_grad()
+
+        # Resample collocation points each epoch (avoids graph accumulation)
+        x_col = torch.rand(n_collocation, device=device) * 2 - 1
+        y_col = torch.rand(n_collocation, device=device) * 2 - 1
+        x_col.requires_grad_(True)
+        y_col.requires_grad_(True)
+
+        # Source term (recomputed from fresh collocation points)
+        f_source = -2 * np.pi**2 * torch.sin(np.pi * x_col) * torch.sin(np.pi * y_col)
 
         # Interior residual
         xy = torch.stack([x_col, y_col], dim=-1)
