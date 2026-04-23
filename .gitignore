@@ -5,9 +5,10 @@ __pycache__/
 .venv/
 
 # ML data (large, downloadable)
-landmark-experiments/data/cifar-10-*/
-landmark-experiments/data/MNIST/
+landmark-experiments/data/
 vae-experiments/data/
+**/data/MNIST/
+**/data/cifar-10-*/
 
 # Lock files (environment-specific)
 uv.lock
