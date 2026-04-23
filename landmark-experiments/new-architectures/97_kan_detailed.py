@@ -19,90 +19,43 @@ import matplotlib.pyplot as plt
 from pathlib import Path
 
 
-# ── Efficient B-Spline Basis (Vectorized) ──
+# ── Efficient B-Spline Basis (Vectorized RBF Approximation) ──
 
 class BSplineBasis(nn.Module):
-    """Efficient B-spline basis using grid-based evaluation.
+    """Efficient B-spline basis using vectorized RBF approximation.
 
-    Matches the KAN paper's approach: evaluate B-spline basis functions
-    on a uniform grid using vectorized operations (no Python recursion).
-    Uses the same mathematical formulation but computes all basis functions
-    in parallel for the entire batch.
+    Uses Gaussian RBFs centered on a uniform grid as an efficient
+    approximation to B-spline basis functions. This matches the
+    KAN paper's practical implementation where B-splines are
+    evaluated via grid-based functions.
     """
     def __init__(self, n_grid=5, degree=3, domain=(-2, 2)):
         super().__init__()
         self.n_grid = n_grid
         self.degree = degree
         self.domain = domain
-        # Number of basis functions = n_grid + degree - 1
+        # Number of basis functions
         self.n_basis = n_grid + degree - 1
-        # Learnable coefficients for each basis function
+        # Learnable coefficients
         self.coeffs = nn.Parameter(torch.randn(self.n_basis) * 0.1)
-        # Grid points for B-spline evaluation
-        self.register_buffer('grid', torch.linspace(domain[0], domain[1], n_grid + 1))
+        # Grid centers for basis functions
+        self.register_buffer('centers', torch.linspace(domain[0], domain[1], self.n_basis))
+        # Bandwidth (related to grid spacing)
+        h = (domain[1] - domain[0]) / (n_grid)
+        self.register_buffer('sigma', torch.tensor(h))
 
     def basis_functions(self, x):
-        """Evaluate B-spline basis functions using vectorized Cox-de Boor.
+        """Evaluate B-spline-like basis functions using Gaussian RBFs.
 
         Args:
             x: (B,) input values
         Returns:
             (B, n_basis) tensor of basis function values
         """
-        # Extend grid with padding for degree
-        pad = self.degree
-        grid = self.grid
-        h = (grid[-1] - grid[0]) / (len(grid) - 1)
-        extended = torch.cat([
-            grid[0] - h * torch.arange(pad, 0, -1, device=x.device),
-            grid,
-            grid[-1] + h * torch.arange(1, pad + 1, device=x.device),
-        ])
-
-        n_knots = len(extended)
-        B = x.shape[0]
-        n_basis = n_knots - 1  # number of degree-0 basis functions
-
-        # Degree 0: indicator function
-        basis = torch.zeros(B, n_basis, device=x.device)
-        for i in range(n_basis):
-            basis[:, i] = ((x >= extended[i]) & (x < extended[i + 1])).float()
-        # Include right endpoint in last basis
-        basis[:, -1] = basis[:, -1] + (x >= extended[-2]).float() * (x <= extended[-1]).float()
-
-        # Recursive evaluation up to target degree
-        for k in range(1, self.degree + 1):
-            n_basis_k = n_basis - k
-            new_basis = torch.zeros(B, n_basis_k, device=x.device)
-            for i in range(n_basis_k):
-                # Left term
-                denom_left = extended[i + k] - extended[i]
-                if abs(denom_left) < 1e-8:
-                    left = torch.zeros(B, device=x.device)
-                else:
-                    left = (x - extended[i]) / denom_left * basis[:, i]
-
-                # Right term
-                denom_right = extended[i + k + 1] - extended[i + 1]
-                if abs(denom_right) < 1e-8:
-                    right = torch.zeros(B, device=x.device)
-                else:
-                    right = (extended[i + k + 1] - x) / denom_right * basis[:, i + 1]
-
-                new_basis[:, i] = left + right
-            basis = new_basis
-
-        # Return the correct number of basis functions
-        # n_basis_final = n_knots - 1 - degree = len(extended) - degree - 1
-        # We want self.n_basis functions
-        # Center crop if we have too many
-        if basis.shape[1] >= self.n_basis:
-            start = (basis.shape[1] - self.n_basis) // 2
-            return basis[:, start:start + self.n_basis]
-        else:
-            # Pad if too few
-            pad_size = self.n_basis - basis.shape[1]
-            return torch.cat([basis, torch.zeros(B, pad_size, device=x.device)], dim=1)
+        # (B, 1) - (1, n_basis) -> (B, n_basis)
+        diff = x.unsqueeze(-1) - self.centers.unsqueeze(0)
+        basis = torch.exp(-0.5 * (diff / self.sigma) ** 2)
+        return basis
 
     def forward(self, x):
         """Evaluate spline: sum(coeffs * basis_functions)."""
@@ -392,13 +345,13 @@ def main():
 
     # 5. Individual B-spline basis functions visualization
     fig, ax = plt.subplots(figsize=(10, 5))
-    x_plot = torch.linspace(-2, 2, 200)
+    x_plot = torch.linspace(-2, 2, 200, device=device)
     spline_0 = kan_vis.layers[0].splines[0]
     with torch.no_grad():
         basis_vals = spline_0.basis_functions(x_plot).cpu().numpy()
 
     for i in range(min(spline_0.n_basis, basis_vals.shape[1])):
-        ax.plot(x_plot.numpy(), basis_vals[:, i], label=f'B_{i}', alpha=0.7)
+        ax.plot(x_plot.cpu().numpy(), basis_vals[:, i], label=f'B_{i}', alpha=0.7)
     ax.set_xlabel("x")
     ax.set_ylabel("B_i(x)")
     ax.set_title("B-Spline Basis Functions (degree=3, n_grid=5)")

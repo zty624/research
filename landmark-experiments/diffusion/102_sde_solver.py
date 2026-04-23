@@ -62,7 +62,9 @@ class VPSDE:
         return np.sqrt(self.beta(t))
 
     def g_torch(self, t):
-        return torch.sqrt(self.beta_min + t * (self.beta_max - self.beta_min))
+        t_t = torch.as_tensor(t, dtype=torch.float32)
+        return torch.sqrt(torch.tensor(self.beta_min, dtype=torch.float32)
+                          + t_t * (self.beta_max - self.beta_min))
 
     def marginal_std(self, t):
         a = self.alpha_cumprod(t)
@@ -83,10 +85,11 @@ def train_score(score_net, sde, data_fn, n_steps=3000, batch_size=256,
 
     for step in range(n_steps):
         x0 = data_fn(batch_size).to(device)
-        t = torch.rand(batch_size, device=device) * (1 - eps) + eps
+        actual_bs = x0.shape[0]
+        t = torch.rand(actual_bs, device=device) * (1 - eps) + eps
 
         alphas = torch.tensor([sde.alpha_cumprod(ti.item()) for ti in t],
-                              device=device).unsqueeze(-1)
+                              device=device, dtype=torch.float32).unsqueeze(-1)
         noise = torch.randn_like(x0)
         stds = torch.sqrt(1 - alphas ** 2 + 1e-8)
         xt = alphas * x0 + stds * noise
@@ -115,13 +118,13 @@ def _reverse_sde_drift(score_net, sde, x, t_val, device):
     t = torch.full((x.shape[0],), t_val, device=device)
     with torch.no_grad():
         score = score_net(x, t)
-        g = sde.g_torch(t_val).unsqueeze(0).unsqueeze(-1) if not isinstance(
-            sde.g_torch(t_val), torch.Tensor) else sde.g_torch(t_val)
+        g = sde.g_torch(t_val).to(device)
         if g.dim() == 0:
             g = g.unsqueeze(0).unsqueeze(-1)
         elif g.dim() == 1:
             g = g.unsqueeze(-1)
-        f = sde.drift(x, t_val)
+        f = -0.5 * sde.beta_min * x - 0.5 * (sde.beta_max - sde.beta_min) * t_val * x
+        f = f.to(device)
     return f - g ** 2 * score, g
 
 
@@ -130,9 +133,7 @@ def _ode_drift(score_net, sde, x, t_val, device):
     t = torch.full((x.shape[0],), t_val, device=device)
     with torch.no_grad():
         score = score_net(x, t)
-        g = sde.g_torch(t_val)
-        if not isinstance(g, torch.Tensor):
-            g = torch.tensor(g, device=device)
+        g = sde.g_torch(t_val).to(device)
         if g.dim() == 0:
             g = g.unsqueeze(0).unsqueeze(-1)
         elif g.dim() == 1:
@@ -281,11 +282,12 @@ def mmd(x, y, sigma=1.0):
     xx = x @ x.T
     yy = y @ y.T
     xy = x @ y.T
-    rx = xx.diag().unsqueeze(0).expand_as(xx)
-    ry = yy.diag().unsqueeze(0).expand_as(yy)
+    rx = xx.diag().unsqueeze(0)  # (1, n_x)
+    ry = yy.diag().unsqueeze(0)  # (1, n_y)
     Kxx = torch.exp(-0.5 / sigma ** 2 * (rx.T + rx - 2 * xx))
     Kyy = torch.exp(-0.5 / sigma ** 2 * (ry.T + ry - 2 * yy))
-    Kxy = torch.exp(-0.5 / sigma ** 2 * (rx.T + ry - 2 * xy))
+    # For Kxy: need ||x_i - y_j||^2 = ||x_i||^2 + ||y_j||^2 - 2<x_i, y_j>
+    Kxy = torch.exp(-0.5 / sigma ** 2 * (rx.T + ry - 2 * xy))  # (n_x, n_y)
     return Kxx.mean() + Kyy.mean() - 2 * Kxy.mean()
 
 

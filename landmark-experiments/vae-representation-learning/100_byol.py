@@ -321,12 +321,13 @@ def check_collapse(encoder, dataloader, device='cpu'):
 
 def train_byol(model, train_loader, n_epochs=20, lr=1e-3, device='cpu', verbose=True):
     """Train BYOL model."""
-    optimizer = torch.optim.Adam(
-        list(model.online_encoder.parameters()) +
-        list(model.online_projector.parameters()) +
-        list(model.online_predictor.parameters()),
-        lr=lr
-    )
+    # Collect trainable parameters (predictor may not exist in ablation)
+    params = (list(model.online_encoder.parameters()) +
+              list(model.online_projector.parameters()))
+    if hasattr(model, 'online_predictor'):
+        params += list(model.online_predictor.parameters())
+
+    optimizer = torch.optim.Adam(params, lr=lr)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, n_epochs)
     losses = []
     probe_accs = []
@@ -344,12 +345,7 @@ def train_byol(model, train_loader, n_epochs=20, lr=1e-3, device='cpu', verbose=
             loss = model(x1, x2)
             optimizer.zero_grad()
             loss.backward()
-            torch.nn.utils.clip_grad_norm_(
-                list(model.online_encoder.parameters()) +
-                list(model.online_projector.parameters()) +
-                list(model.online_predictor.parameters()),
-                max_norm=1.0
-            )
+            torch.nn.utils.clip_grad_norm_(params, max_norm=1.0)
             optimizer.step()
 
             epoch_loss += loss.item()

@@ -231,7 +231,7 @@ class GaussianSplatModel(nn.Module):
         return pos_2d, cov_2d, depth, valid
 
     def render(self, V, P, img_size=64):
-        """Differentiable splatting: render image from Gaussians."""
+        """Differentiable splatting: batch-render all Gaussians at once."""
         pos_2d, cov_2d, depth, valid = self.project_to_2d(V, P, img_size)
         if pos_2d is None:
             return torch.ones(img_size, img_size, 3, device=self.device) * 0.5
@@ -239,8 +239,22 @@ class GaussianSplatModel(nn.Module):
         opacities = torch.sigmoid(self.log_opacities).squeeze(-1)  # (N,)
         colors = torch.sigmoid(self.colors)  # (N, 3)
 
-        # Sort by depth (back-to-front)
-        sort_idx = torch.argsort(-depth)  # far to near
+        # Subsample Gaussians
+        n_valid = valid.sum().item()
+        max_render = min(n_valid, 200)
+        valid_indices = torch.where(valid)[0]
+        if len(valid_indices) > max_render:
+            perm = torch.randperm(len(valid_indices), device=self.device)[:max_render]
+            valid_indices = valid_indices[perm]
+
+        # Filter to valid Gaussians
+        mu = pos_2d[valid_indices]  # (K, 2)
+        S = cov_2d[valid_indices]   # (K, 2, 2)
+        alpha = opacities[valid_indices]  # (K,)
+        col = colors[valid_indices]  # (K, 3)
+
+        # Add small regularization to ensure positive definite covariances
+        S = S + 1e-4 * torch.eye(2, device=self.device).unsqueeze(0)
 
         # Create pixel grid
         u = torch.linspace(-1, 1, img_size, device=self.device)
@@ -248,68 +262,49 @@ class GaussianSplatModel(nn.Module):
         U, Vg = torch.meshgrid(u, v, indexing='ij')
         pixels = torch.stack([U, Vg], dim=-1).reshape(-1, 2)  # (M, 2)
 
-        # For efficiency, only render Gaussians within the frustum
-        image = torch.zeros(img_size * img_size, 3, device=self.device)
-        alpha_acc = torch.zeros(img_size * img_size, 1, device=self.device)
+        # Batch compute: diff = pixels - mu for all Gaussians
+        # pixels: (M, 2), mu: (K, 2) -> diff: (K, M, 2)
+        diff = pixels.unsqueeze(0) - mu.unsqueeze(1)  # (K, M, 2)
 
-        # Batch rendering: evaluate each Gaussian's contribution
-        n_valid = valid.sum().item()
-        # Subsample Gaussians if too many for memory
-        max_render = min(n_valid, 300)
-        valid_indices = torch.where(valid)[0]
-        if len(valid_indices) > max_render:
-            perm = torch.randperm(len(valid_indices), device=self.device)[:max_render]
-            valid_indices = valid_indices[perm]
+        # Compute Mahalanobis distance using batched matrix operations
+        # S_inv: (K, 2, 2) — use torch.linalg.inv for batched 2x2
+        S_inv = torch.linalg.inv(S)  # (K, 2, 2)
 
-        for idx in valid_indices:
-            mu = pos_2d[idx]  # (2,)
-            S = cov_2d[idx]   # (2, 2)
-            alpha = opacities[idx]
-            col = colors[idx]  # (3,)
+        # mahal = sum over dims of (diff @ S_inv * diff)
+        # diff: (K, M, 2), S_inv: (K, 2, 2)
+        # diff @ S_inv -> (K, M, 2)
+        transformed = torch.einsum('kmi,kij->kmj', diff, S_inv)  # (K, M, 2)
+        mahal = (transformed * diff).sum(dim=-1)  # (K, M)
 
-            # Skip if Gaussian center is far outside image
-            if mu[0].abs() > 2.0 or mu[1].abs() > 2.0:
-                continue
+        # Clamp for numerical stability
+        mahal = mahal.clamp(max=20.0)
+        weight = torch.exp(-0.5 * mahal)  # (K, M)
 
-            # Compute screen-space extent (2 sigma)
-            try:
-                eigvals = torch.linalg.eigvalsh(S)
-                if (eigvals <= 0).any():
-                    continue
-                radius = 3.0 * torch.sqrt(eigvals.max())
-            except Exception:
-                continue
+        # Alpha compositing: sort by depth, then accumulate front-to-back
+        sort_idx = torch.argsort(-depth[valid_indices])  # far to near
+        weight = weight[sort_idx]  # (K, M)
+        alpha_s = alpha[sort_idx]  # (K,)
+        col_s = col[sort_idx]  # (K, 3)
 
-            if radius > 2.0:
-                continue
+        # Compute per-Gaussian contribution with transmittance
+        # contrib_k = T_k * weight_k * alpha_k * color_k
+        # T_k = prod_{j<k} (1 - weight_j * alpha_j)
+        contrib = weight * alpha_s.unsqueeze(1)  # (K, M)
+        one_minus_contrib = 1.0 - contrib  # (K, M)
 
-            # Mahalanobis distance for all pixels
-            diff = pixels - mu.unsqueeze(0)  # (M, 2)
+        # Compute cumulative transmittance: T_k = prod_{j<k} one_minus_contrib_j
+        log_T = torch.log(one_minus_contrib.clamp(min=1e-10))
+        cum_log_T = torch.cumsum(log_T, dim=0)
+        # Shift: T_k = exp(cumsum[j<k]) = exp(cum_log_T[j] - log_T[j])
+        T = torch.exp(torch.cat([torch.zeros(1, weight.shape[1], device=self.device),
+                                  cum_log_T[:-1]], dim=0))
 
-            # Inverse of cov_2d
-            try:
-                S_inv = torch.inverse(S)
-            except Exception:
-                continue
+        # Image = sum_k T_k * contrib_k * color_k
+        image = (T.unsqueeze(-1) * contrib.unsqueeze(-1) * col_s.unsqueeze(1)).sum(dim=0)  # (M, 3)
 
-            # Gaussian weight: exp(-0.5 * diff^T S_inv diff)
-            mahal = (diff @ S_inv * diff).sum(dim=-1)  # (M,)
-            weight = torch.exp(-0.5 * mahal)  # (M,)
-
-            # Alpha compositing (front-to-back)
-            T = 1.0 - alpha_acc.squeeze(-1)  # (M,) transmittance
-            contrib = T * weight * alpha  # (M,)
-
-            image += contrib.unsqueeze(-1) * col.unsqueeze(0)
-            alpha_acc += contrib.unsqueeze(-1)
-
-            # Early termination
-            if (alpha_acc > 0.99).all():
-                break
-
-        # Background (differentiable: apply everywhere, alpha_acc masks naturally)
-        T_bg = 1.0 - alpha_acc  # (M, 1) remaining transmittance
-        image = image + T_bg * 0.8  # gray background fills remaining
+        # Background: remaining transmittance
+        T_final = torch.exp(cum_log_T[-1])  # (M,)
+        image = image + T_final.unsqueeze(-1) * 0.8
 
         return image.reshape(img_size, img_size, 3)
 
@@ -328,8 +323,8 @@ def train_gaussian_splatting(n_gaussians=500, n_views=6, img_size=64,
     # Build camera matrices
     cameras = []
     for eye in cam_positions:
-        V = look_at(eye, [0, 0, 0], [0, 1, 0]).to(device)
-        P = perspective(50, 1.0).to(device)
+        V = look_at(eye, [0, 0, 0], [0, 1, 0]).to(device).detach()
+        P = perspective(50, 1.0).to(device).detach()
         cameras.append((V, P))
 
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
