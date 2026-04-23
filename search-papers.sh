@@ -22,6 +22,12 @@ if echo "$QUERY" | grep -qP '^\d{4}\.\d{4,5}$'; then
     # Exact arxiv ID search
     echo "=== Searching for arxiv ID: $QUERY ==="
     results=$(grep -rn "abs/$QUERY" "$DIR"/*-arxiv-urls.md 2>/dev/null || true)
+    # Also check if a note exists for this arxiv ID
+    note_path=$(find "$DIR/notes" -name "$QUERY.md" 2>/dev/null | head -1)
+    if [ -n "$note_path" ]; then
+        note_topic=$(basename "$(dirname "$note_path")")
+        echo "  Note found: notes/$note_topic/$QUERY.md"
+    fi
     if [ -z "$results" ]; then
         echo "  No results found."
     else

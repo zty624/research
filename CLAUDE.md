@@ -16,8 +16,10 @@ A curated collection of ~1,420 AI/ML research paper references organized by topi
 - **`MUST-READ-2026.md`** — ~30 papers defining the 2026 frontier.
 - **`search-papers.sh`** — CLI search tool: `./search-papers.sh <keyword|arxiv-id|regex>`
 - **`papers/`** — Downloaded PDFs (named by arxiv ID).
-- **`notes/`** — Paper reading notes in Chinese, named by arxiv ID.
 - **`vae/`** — Downloaded PDFs for VAE/representation learning papers.
+- **`notes/<topic>/`** — Paper reading notes in Chinese, organized by topic. Named by arxiv ID. Topics match the 17 `*-arxiv-urls.md` names. Orphaned notes go to `notes/_unsorted/`.
+- **`landmark-experiments/<topic>/`** — Minimal experiment reproductions, organized by topic. Each topic has `NN_name.py` scripts and `results/NN-name/` output dirs. Shared `data/` and `pyproject.toml` at the `landmark-experiments/` level.
+- **`landmark-experiments/vae-representation-learning/vae-experiments/`** — Separate VAE-focused experiment suite with its own `pyproject.toml`.
 
 ## Key Conventions
 

@@ -1,0 +1,16 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# ML data (large, downloadable)
+landmark-experiments/data/cifar-10-*/
+landmark-experiments/data/MNIST/
+vae-experiments/data/
+
+# Lock files (environment-specific)
+uv.lock
+
+# OS
+.DS_Store
