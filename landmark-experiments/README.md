@@ -47,6 +47,10 @@ uv run --project ../vae-experiments python 36_batchnorm.py
 uv run --project ../vae-experiments python 37_layernorm.py
 uv run --project ../vae-experiments python 38_rmsnorm.py
 uv run --project ../vae-experiments python 39_rope.py
+uv run --project ../vae-experiments python 40_swiglu.py
+uv run --project ../vae-experiments python 41_bpe_tokenization.py
+uv run --project ../vae-experiments python 42_attention_sinks.py
+uv run --project ../vae-experiments python 43_scaling_laws.py
 ```
 
 ## Experiments
@@ -316,6 +320,34 @@ uv run --project ../vae-experiments python 39_rope.py
 - **Compares**: Sinusoidal vs learned vs RoPE position encoding, length extrapolation
 - **Visualizes**: Training curves, length extrapolation, relative position dot product, rotation visualization, concept diagram
 - **Key finding**: RoPE achieves best training loss (0.94 vs 1.11) and best length extrapolation (42.5% at 2x length); q·k variance is 0 at same relative distance
+
+### 40. SwiGLU / GLU Activations (2002.05202, 1705.03122)
+- **Task**: Language modeling with Transformer FFN variants
+- **Reproduces**: ReLU, GELU, Swish, GLU, SwiGLU, GeGLU activation functions; gated linear unit mechanism (gate ⊗ value)
+- **Compares**: 6 FFN variants in Transformer LM
+- **Visualizes**: Training curves, final loss comparison, activation shapes, parameter counts, concept diagram
+- **Key finding**: Gated variants significantly outperform plain activations (GeGLU 0.67, SwiGLU 0.82 vs ReLU 1.05); SwiGLU is LLaMA standard
+
+### 41. BPE Tokenization (1508.07909)
+- **Task**: Subword tokenization for language modeling
+- **Reproduces**: Byte-Pair Encoding (iterative most-frequent pair merging), character/word/BPE tokenizers, OOV handling
+- **Compares**: Character-level vs BPE-50/100/200 tokenization for LM training
+- **Visualizes**: Training curves, compression ratio, merge operations, vocabulary growth, tokenization spectrum, concept diagram
+- **Key finding**: BPE handles OOV without <unk> tokens; BPE-100 achieves 4.6x compression vs char-level with better loss (0.022 vs 0.049)
+
+### 42. Attention Sinks / StreamingLLM (2309.17453)
+- **Task**: KV cache management for infinite-length generation
+- **Reproduces**: Attention sink phenomenon, full KV cache vs naive eviction vs StreamingLLM (keep sinks + window)
+- **Compares**: KL divergence from full cache for naive eviction vs StreamingLLM
+- **Visualizes**: Attention heatmaps, attention to position 0 over sequence, KL divergence over generation steps, concept diagram
+- **Key finding**: Naive eviction causes catastrophic collapse (KL=6.12); StreamingLLM preserves distribution (KL=0.60); first tokens act as attention sinks
+
+### 43. Scaling Laws / Chinchilla (2001.08361, 2203.15556)
+- **Task**: Understanding compute-optimal LLM training
+- **Reproduces**: Power-law scaling of loss with model size and data size; Chinchilla optimal compute allocation
+- **Compares**: 6 model sizes (18K-817K params), 6 data sizes (500-20K tokens), compute-optimal frontier
+- **Visualizes**: Loss vs parameters (power law), loss vs data, Chinchilla compute trade-off, concept diagram
+- **Key finding**: Loss follows power-law with model size and data; for fixed compute, smaller models trained longer can match larger models
 
 ## Prior Experiments
 
