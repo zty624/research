@@ -6,7 +6,7 @@ __pycache__/
 
 # ML data (large, downloadable)
 landmark-experiments/data/
-vae-experiments/data/
+landmark-experiments/vae-experiments/data/
 **/data/MNIST/
 **/data/cifar-10-*/
 
@@ -22,8 +22,9 @@ landmark-experiments/results/
 landmark-experiments/run_*.sh
 landmark-experiments/deploy_cluster.sh
 
-# Unrelated directories
-Qwen/
+# PDFs (re-downloadable from arxiv)
+papers/
+vae/
 
 # Ralph loop
 .claude/ralph-loop.local.md

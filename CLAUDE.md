@@ -9,17 +9,17 @@ A curated collection of ~1,420 AI/ML research paper references organized by topi
 ## Repository Structure
 
 - **`*-arxiv-urls.md`** — The 17 topic files. Each has a header with paper count/date, then sections of `| URL | Description |` tables. Landmark papers are marked with 开山.
-- **`README-index.md`** — Master index with paper counts, cross-topic map, gap analysis, hot topic clusters.
-- **`ROADMAP.md`** — 3-tier reading path per topic (Foundations → Core Advances → Frontier) with dependency graph.
-- **`CROSS-REF.md`** — Papers appearing in multiple topic files, organized by cross-cutting theme.
-- **`TIMELINE.md`** — Intellectual lineage from 2013 to 2026.
-- **`MUST-READ-2026.md`** — ~30 papers defining the 2026 frontier.
+- **`README.md`** — Master index with paper counts, cross-topic map, gap analysis, hot topic clusters.
+- **`docs/ROADMAP.md`** — 3-tier reading path per topic (Foundations → Core Advances → Frontier) with dependency graph.
+- **`docs/CROSS-REF.md`** — Papers appearing in multiple topic files, organized by cross-cutting theme.
+- **`docs/TIMELINE.md`** — Intellectual lineage from 2013 to 2026.
+- **`docs/MUST-READ-2026.md`** — ~30 papers defining the 2026 frontier.
 - **`search-papers.sh`** — CLI search tool: `./search-papers.sh <keyword|arxiv-id|regex>`
-- **`papers/`** — Downloaded PDFs (named by arxiv ID).
-- **`vae/`** — Downloaded PDFs for VAE/representation learning papers.
+- **`papers/`** — Downloaded PDFs (named by arxiv ID). Gitignored — re-downloadable from arxiv.
 - **`notes/<topic>/`** — Paper reading notes in Chinese, organized by topic. Named by arxiv ID. Topics match the 17 `*-arxiv-urls.md` names. Orphaned notes go to `notes/_unsorted/`.
+- **`notes/qwen/`** — Qwen model family reading notes, organized by variant (audio, base-llm, coder, etc.).
 - **`landmark-experiments/<topic>/`** — Minimal experiment reproductions, organized by topic. Each topic has `NN_name.py` scripts and `results/NN-name/` output dirs. Shared `data/` and `pyproject.toml` at the `landmark-experiments/` level.
-- **`landmark-experiments/vae-representation-learning/vae-experiments/`** — Separate VAE-focused experiment suite with its own `pyproject.toml`.
+- **`landmark-experiments/vae-experiments/`** — Separate VAE deep-dive experiment suite with its own `pyproject.toml` (Python 3.13+).
 
 ## Key Conventions
 

@@ -3,11 +3,11 @@
 > Curated on 2026-04-19. **1,429 unique papers** (1,544 total references) across 17 topic files.
 > Focus: 2023–2026 recent work + key landmarks.
 >
-> **New:** [Reading Roadmap](ROADMAP.md) — suggested reading order by topic with dependency graph
-> **New:** [Cross-Topic Reference](CROSS-REF.md) — papers appearing in multiple files, organized by theme
+> **New:** [Reading Roadmap](docs/ROADMAP.md) — suggested reading order by topic with dependency graph
+> **New:** [Cross-Topic Reference](docs/CROSS-REF.md) — papers appearing in multiple files, organized by theme
 > **New:** `./search-papers.sh <query>` — CLI search by keyword, arxiv ID, or regex
-> **New:** [2026 Must-Read Papers](MUST-READ-2026.md) — ~30 papers that define the 2026 frontier
-> **New:** [Research Timeline](TIMELINE.md) — intellectual lineage from VAE (2013) to agentic AI (2026)
+> **New:** [2026 Must-Read Papers](docs/MUST-READ-2026.md) — ~30 papers that define the 2026 frontier
+> **New:** [Research Timeline](docs/TIMELINE.md) — intellectual lineage from VAE (2013) to agentic AI (2026)
 
 ---
 
